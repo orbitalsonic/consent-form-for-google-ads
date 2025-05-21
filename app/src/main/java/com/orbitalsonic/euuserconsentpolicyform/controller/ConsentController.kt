@@ -9,22 +9,26 @@ import com.google.android.ump.ConsentInformation.ConsentStatus
 import com.google.android.ump.ConsentRequestParameters
 import com.google.android.ump.UserMessagingPlatform
 import com.orbitalsonic.euuserconsentpolicyform.BuildConfig
+import com.orbitalsonic.euuserconsentpolicyform.MainActivity.Companion.TAG
 import com.orbitalsonic.euuserconsentpolicyform.callbacks.ConsentCallback
-import com.orbitalsonic.euuserconsentpolicyform.enums.CMPStatus
+
+/**
+ * @Author: Muhammad Yaqoob
+ * @Date: 29,March,2024.
+ * @Accounts
+ *      -> https://github.com/orbitalsonic
+ *      -> https://www.linkedin.com/in/myaqoob7
+ */
 
 class ConsentController(private val activity: Activity) {
 
-    val TAG = "consentControllerTAG"
-
     private var consentInformation: ConsentInformation? = null
     private var consentCallback: ConsentCallback? = null
+    private var consentForm: ConsentForm? = null
 
-    val canRequestAds: Boolean get() = consentInformation?.canRequestAds() ?: false
+    val canRequestAds: Boolean get() = consentInformation?.canRequestAds() == true
 
-    fun initConsent(
-        @Debug("Device Id is only use for DEBUG") deviceId: String,
-        callback: ConsentCallback
-    ) {
+    fun initConsent(@Debug("Device Id is only use for DEBUG") deviceId: String, callback: ConsentCallback?) {
         this.consentCallback = callback
 
         val isDebug = BuildConfig.DEBUG
@@ -34,136 +38,104 @@ class ConsentController(private val activity: Activity) {
             .addTestDeviceHashedId(deviceId)
             .build()
 
-        val params = if (isDebug) {
-            Log.d(TAG, "Debug parameters setConsentDebugSettings")
-            ConsentRequestParameters.Builder().setConsentDebugSettings(debugSettings).build()
-        } else {
-            Log.d(TAG, "Release parameters setTagForUnderAgeOfConsent")
-            ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(false).build()
+        val params = when (isDebug) {
+            true -> ConsentRequestParameters.Builder().setConsentDebugSettings(debugSettings).build()
+            false -> ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(false).build()
         }
 
         consentInformation = UserMessagingPlatform.getConsentInformation(activity).also {
             if (isDebug) {
                 Log.d(TAG, "Consent Form reset() in Debug")
                 it.reset()
-            }else{
-                Log.d(TAG, "All is OK not Reset in release")
             }
 
-            consentCallback?.onReadyForInitialization()
-            Log.d(TAG, "onReadyForInitialization")
+            Log.d(TAG, "Consent ready for initialization")
             it.requestConsentInfoUpdate(activity, params, {
-                consentCallback?.onInitializationSuccess()
-                consentCallback?.onConsentFormAvailability(it.isConsentFormAvailable)
-                Log.d(TAG, "onInitializationSuccess")
-                Log.d(TAG, "onConsentFormAvailability, available: ${it.isConsentFormAvailable}")
+                Log.d(TAG, "Consent successfully initialized \n Is Consent Form Available: ${it.isConsentFormAvailable}")
+
                 if (it.isConsentFormAvailable) {
-                    when(consentInformation?.consentStatus){
-                        ConsentStatus.REQUIRED -> {
-                            consentCallback?.onConsentStatus(CMPStatus.REQUIRED)
-                            Log.d(TAG, "consentStatus: REQUIRED")
-                            loadConsentForm()
-                        }
-                        ConsentStatus.NOT_REQUIRED -> {
-                            consentCallback?.onConsentStatus(CMPStatus.NOT_REQUIRED)
-                            Log.d(TAG, "consentStatus: NOT_REQUIRED")
-                        }
-                        ConsentStatus.OBTAINED -> {
-                            consentCallback?.onConsentStatus(CMPStatus.OBTAINED)
-                            Log.d(TAG, "consentStatus: OBTAINED")
-                        }
-                        ConsentStatus.UNKNOWN -> {
-                            consentCallback?.onConsentStatus(CMPStatus.UNKNOWN)
-                            Log.d(TAG, "consentStatus: UNKNOWN")
-                        }
-                        else -> {
-                            Log.d(TAG, "consentInformation is null")
-                        }
-                    }
-                    when(consentInformation?.privacyOptionsRequirementStatus){
-                        ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED -> {
-                            consentCallback?.onPolicyStatus(CMPStatus.REQUIRED)
-                            Log.d(TAG, "privacyOptionsRequirementStatus: REQUIRED")
-                        }
-                        ConsentInformation.PrivacyOptionsRequirementStatus.NOT_REQUIRED -> {
-                            consentCallback?.onPolicyStatus(CMPStatus.NOT_REQUIRED)
-                            Log.d(TAG, "privacyOptionsRequirementStatus: NOT_REQUIRED")
-                        }
-                        ConsentInformation.PrivacyOptionsRequirementStatus.UNKNOWN -> {
-                            consentCallback?.onPolicyStatus(CMPStatus.UNKNOWN)
-                            Log.d(TAG, "privacyOptionsRequirementStatus: UNKNOWN")
-                        }
-                        else -> {
-                            Log.d(TAG, "consentInformation is null")
-                        }
+
+                    // Show Consent Logs
+                    when (consentInformation?.consentStatus) {
+                        ConsentStatus.REQUIRED -> Log.d(TAG, "consentStatus: REQUIRED")
+                        ConsentStatus.NOT_REQUIRED -> Log.d(TAG, "consentStatus: NOT_REQUIRED")
+                        ConsentStatus.OBTAINED -> Log.d(TAG, "consentStatus: OBTAINED")
+                        ConsentStatus.UNKNOWN -> Log.d(TAG, "consentStatus: UNKNOWN")
                     }
 
+                    // Show Policy Logs
+                    when (consentInformation?.privacyOptionsRequirementStatus) {
+                        ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED -> Log.d(TAG, "privacyOptionsRequirementStatus: REQUIRED")
+                        ConsentInformation.PrivacyOptionsRequirementStatus.NOT_REQUIRED -> Log.d(TAG, "privacyOptionsRequirementStatus: NOT_REQUIRED")
+                        ConsentInformation.PrivacyOptionsRequirementStatus.UNKNOWN -> Log.d(TAG, "privacyOptionsRequirementStatus: UNKNOWN")
+                        null -> Log.d(TAG, "Consent Information is null")
+                    }
+
+                    // Whether consent & policy is required or not
+                    when (consentInformation?.consentStatus == ConsentStatus.REQUIRED) {
+                        true -> loadConsentForm()
+                        false -> consentCallback?.onAdsLoad(canRequestAds)
+                    }
+
+                    val isPolicyRequired = consentInformation?.privacyOptionsRequirementStatus == ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
+                    consentCallback?.onPolicyStatus(isPolicyRequired)
+
+                } else {
+                    Log.d(TAG, "Consent form is not available")
+                    consentCallback?.onAdsLoad(canRequestAds)
                 }
             }, { error ->
-                consentCallback?.onInitializationError(error.message)
-                Log.e(TAG, "onInitializationError: ${error.message}")
+                Log.e(TAG, "initializationError: ${error.message}")
+                consentCallback?.onAdsLoad(canRequestAds)
             })
         }
     }
 
     private fun loadConsentForm() {
         UserMessagingPlatform.loadConsentForm(activity, { consentForm ->
-            consentCallback?.onConsentFormLoadSuccess()
-            Log.d(TAG, "onConsentFormLoadSuccess")
-            showConsentForm(consentForm)
+            Log.d(TAG, "Consent Form Load Successfully")
+            this.consentForm = consentForm
+            consentCallback?.onConsentFormLoaded()
         }) { formError ->
-            consentCallback?.onConsentFormLoadFailure(formError.message)
-            Log.e(TAG, "onConsentFormLoadFailure: ${formError.message}")
+            Log.e(TAG, "Consent Form Load to Fail: ${formError.message}")
+            consentCallback?.onAdsLoad(canRequestAds)
         }
     }
 
-    private fun showConsentForm(consentForm: ConsentForm) {
-        consentCallback?.onRequestShowConsentForm()
-        Log.d(TAG, "onRequestShowConsentForm")
-        consentForm.show(activity) { formError ->
+    fun showConsentForm() {
+        Log.i(TAG, "Consent form is showing")
+        consentForm?.show(activity) { formError ->
+            Log.i(TAG, "consent Form Dismissed")
+
             consentCallback?.onConsentFormDismissed()
-            Log.d(TAG, "onConsentFormDismissed")
-            formError?.let {
-                consentCallback?.onConsentFormShowFailure(it.message)
-                Log.e(TAG, "onConsentFormShowFailure: ${it.message}")
-            } ?: run {
-                checkConsentAndPrivacyStatus()
+            consentCallback?.onAdsLoad(canRequestAds)
+
+            when (formError == null) {
+                true -> checkConsentAndPrivacyStatus()
+                false -> Log.e(TAG, "Consent Form Show to fail: ${formError.message}")
             }
+
+        } ?: run {
+            Log.e(TAG, "Consent form failed to show")
+            consentCallback?.onAdsLoad(canRequestAds)
         }
     }
 
     private fun checkConsentAndPrivacyStatus() {
-        Log.d(TAG, "check Consent And Privacy Status After Form Dismissed")
-        when(consentInformation?.consentStatus){
-            ConsentStatus.REQUIRED -> {
-                Log.d(TAG, "consentStatus: REQUIRED")
-            }
-            ConsentStatus.NOT_REQUIRED -> {
-                Log.d(TAG, "consentStatus: NOT_REQUIRED")
-            }
-            ConsentStatus.OBTAINED -> {
-                Log.d(TAG, "consentStatus: OBTAINED")
-            }
-            ConsentStatus.UNKNOWN -> {
-                Log.d(TAG, "consentStatus: UNKNOWN")
-            }
-            else -> {
-                Log.d(TAG, "consentInformation is null")
-            }
+        Log.d(TAG, "Check Consent And Privacy Status After Form Dismissed")
+
+        when (consentInformation?.consentStatus) {
+            ConsentStatus.REQUIRED -> Log.d(TAG, "consentStatus: REQUIRED")
+            ConsentStatus.NOT_REQUIRED -> Log.d(TAG, "consentStatus: NOT_REQUIRED")
+            ConsentStatus.OBTAINED -> Log.d(TAG, "consentStatus: OBTAINED")
+            ConsentStatus.UNKNOWN -> Log.d(TAG, "consentStatus: UNKNOWN")
+            null -> Log.d(TAG, "Consent Information is null")
         }
-        when(consentInformation?.privacyOptionsRequirementStatus){
-            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED -> {
-                Log.d(TAG, "privacyOptionsRequirementStatus: REQUIRED")
-            }
-            ConsentInformation.PrivacyOptionsRequirementStatus.NOT_REQUIRED -> {
-                Log.d(TAG, "privacyOptionsRequirementStatus: NOT_REQUIRED")
-            }
-            ConsentInformation.PrivacyOptionsRequirementStatus.UNKNOWN -> {
-                Log.d(TAG, "privacyOptionsRequirementStatus: UNKNOWN")
-            }
-            else -> {
-                Log.d(TAG, "consentInformation is null")
-            }
+        when (consentInformation?.privacyOptionsRequirementStatus) {
+            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED -> Log.d(TAG, "privacyOptionsRequirementStatus: REQUIRED")
+            ConsentInformation.PrivacyOptionsRequirementStatus.NOT_REQUIRED -> Log.d(TAG, "privacyOptionsRequirementStatus: NOT_REQUIRED")
+            ConsentInformation.PrivacyOptionsRequirementStatus.UNKNOWN -> Log.d(TAG, "privacyOptionsRequirementStatus: UNKNOWN")
+            null -> Log.d(TAG, "Consent Information is null")
         }
     }
 

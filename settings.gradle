@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "EU User Consent Policy Form"
+rootProject.name = "CMP Form"
 include ':app'

@@ -1,18 +1,16 @@
 package com.orbitalsonic.euuserconsentpolicyform.callbacks
 
-import com.orbitalsonic.euuserconsentpolicyform.enums.CMPStatus
-
+/**
+ * @Author: Muhammad Yaqoob
+ * @Date: 29,March,2024.
+ * @Accounts
+ *      -> https://github.com/orbitalsonic
+ *      -> https://www.linkedin.com/in/myaqoob7
+ */
 
 interface ConsentCallback {
-    fun onReadyForInitialization()
-    fun onInitializationSuccess()
-    fun onInitializationError(error: String)
-    fun onConsentFormAvailability(available:Boolean)
-    fun onConsentFormLoadSuccess()
-    fun onConsentFormLoadFailure(error: String)
-    fun onRequestShowConsentForm()
-    fun onConsentFormShowFailure(error: String)
-    fun onConsentFormDismissed()
-    fun onConsentStatus(status: CMPStatus)
-    fun onPolicyStatus(status:CMPStatus)
+    fun onAdsLoad(canRequestAd: Boolean) {}
+    fun onConsentFormLoaded() {}
+    fun onConsentFormDismissed() {}
+    fun onPolicyStatus(required: Boolean) {}
 }
